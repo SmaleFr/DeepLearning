@@ -1,15 +1,20 @@
 import os
+import sys
 
 import cv2
 import numpy as np
 
 CLASSES = ["objet1", "objet2", "objet3", "autre", "background"]
 DATASET_DIR = os.path.join(os.path.dirname(__file__), "dataset")
-OUTPUT_FILE = os.path.join(os.path.dirname(__file__), "dataset.npz")
-IMG_SIZE = 64
+DEFAULT_IMG_SIZE = 64
 CROP_WIDTH_RATIO = 0.6
 TRAIN_RATIO = 0.8
 SEED = 42
+
+
+def output_file(img_size):
+    suffix = "" if img_size == DEFAULT_IMG_SIZE else f"_{img_size}"
+    return os.path.join(os.path.dirname(__file__), f"dataset{suffix}.npz")
 
 
 def capture_order(filename):
@@ -25,7 +30,7 @@ def center_crop_width(img, ratio=CROP_WIDTH_RATIO):
     return img[:, x0 : x0 + crop_w]
 
 
-def load_class_images(class_name):
+def load_class_images(class_name, img_size):
     class_dir = os.path.join(DATASET_DIR, class_name)
     images = []
     for filename in sorted(os.listdir(class_dir), key=capture_order):
@@ -35,7 +40,7 @@ def load_class_images(class_name):
             continue
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = center_crop_width(img)
-        img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+        img = cv2.resize(img, (img_size, img_size))
         images.append(img)
     return np.array(images, dtype="uint8")
 
@@ -47,12 +52,12 @@ def split_train_test(images, label):
     return images[:n_train], labels[:n_train], images[n_train:], labels[n_train:]
 
 
-def build_dataset():
+def build_dataset(img_size=DEFAULT_IMG_SIZE):
     rng = np.random.default_rng(SEED)
     X_train, y_train, X_test, y_test = [], [], [], []
 
     for label, class_name in enumerate(CLASSES):
-        images = load_class_images(class_name)
+        images = load_class_images(class_name, img_size)
         print(f"{class_name}: {len(images)} images")
         if len(images) == 0:
             continue
@@ -75,8 +80,9 @@ def build_dataset():
     X_train, y_train = X_train[train_shuffle], y_train[train_shuffle]
     X_test, y_test = X_test[test_shuffle], y_test[test_shuffle]
 
+    out_file = output_file(img_size)
     np.savez_compressed(
-        OUTPUT_FILE,
+        out_file,
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
@@ -84,10 +90,11 @@ def build_dataset():
         class_names=np.array(CLASSES),
     )
 
-    print(f"\nDataset sauvegardé dans {OUTPUT_FILE}")
+    print(f"\nDataset sauvegardé dans {out_file}")
     print(f"X_train: {X_train.shape}, y_train: {y_train.shape}")
     print(f"X_test:  {X_test.shape}, y_test:  {y_test.shape}")
 
 
 if __name__ == "__main__":
-    build_dataset()
+    size = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_IMG_SIZE
+    build_dataset(size)
